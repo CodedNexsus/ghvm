@@ -1,0 +1,109 @@
+name: Github-Rdp[Windows]
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build-on-windows:
+    runs-on: windows-latest
+    permissions:
+      contents: read
+      id-token: write
+      packages: write
+
+    steps:
+      # Step 1: Create Rohit user and set password
+      - name: Create Rohit user
+        shell: cmd
+        continue-on-error: true
+        run: |
+          net user Rohit "OLDUNER#6" /add
+          net localgroup Administrators Rohit /add
+          net user Rohit /active:yes
+
+      # Install VS Code (system-wide so all users can use it)
+      - name: Install VS Code
+        shell: pwsh
+        continue-on-error: true
+        run: |
+          $url = "https://update.code.visualstudio.com/latest/win32-x64/stable"
+          $output = "$env:TEMP\VSCodeSetup.exe"
+          Invoke-WebRequest -Uri $url -OutFile $output
+          Start-Process -FilePath $output -Args "/silent /mergetasks=!runcode" -Wait
+
+      # Install JDK 26 system-wide
+      - name: Install JDK 26
+        shell: pwsh
+        continue-on-error: true
+        run: |
+          winget install --source winget EclipseAdoptium.Temurin.26.JDK --silent --accept-package-agreements
+
+      # Step 2: Restore Data folder cache
+      - name: Restore Data folder cache
+        uses: actions/cache@v4
+        continue-on-error: true
+        with:
+          path: C:\Users\Rohit\Desktop\Data
+          key: ${{ runner.os }}-runner-desktop-data-${{ github.run_number }}
+          restore-keys: |
+            ${{ runner.os }}-runner-desktop-data-
+
+      # Step 3: Download Pinggy CLI
+      - name: Download Pinggy CLI
+        shell: pwsh
+        continue-on-error: true
+        run: |
+          $url = "https://s3.ap-south-1.amazonaws.com/public.pinggy.binaries/cli/v0.2.5/windows/amd64/pinggy.exe"
+          $output = "$env:USERPROFILE\pinggy.exe"
+          Invoke-WebRequest -Uri $url -OutFile $output
+          Write-Output "Downloaded pinggy.exe to $output"
+
+      # Install opencode-ai (synchronous, available for all users)
+      - name: Install opencode-ai
+        shell: pwsh
+        continue-on-error: true
+        run: |
+          $rohitDir = "C:\Users\Rohit\AppData\Roaming\npm"
+          New-Item -ItemType Directory -Force -Path $rohitDir
+          npm config set prefix $rohitDir
+          npm install -g opencode-ai
+          $machinePath = [Environment]::GetEnvironmentVariable("Path", "Machine")
+          if ($machinePath -notlike "*$rohitDir*") {
+            [Environment]::SetEnvironmentVariable("Path", "$machinePath;$rohitDir", "Machine")
+          }
+
+      # Install Bun (synchronous, available for all users)
+      - name: Install Bun
+        shell: pwsh
+        continue-on-error: true
+        run: |
+          $env:BUN_INSTALL = "C:\Users\Rohit\.bun"
+          irm bun.sh/install.ps1 | iex
+          $bunDir = "C:\Users\Rohit\.bun\bin"
+          $machinePath = [Environment]::GetEnvironmentVariable("Path", "Machine")
+          if ($machinePath -notlike "*$bunDir*") {
+            [Environment]::SetEnvironmentVariable("Path", "$machinePath;$bunDir", "Machine")
+          }
+
+      # Step 4: Run reverse tunnel with Pinggy (timeout 5h 45m)
+      - name: Run reverse tunnel with Pinggy
+        shell: pwsh
+        timeout-minutes: 350
+        continue-on-error: true
+        run: |
+          $pinggy = "$env:USERPROFILE\pinggy.exe"
+          while ($true) {
+              & $pinggy -p 443 -R0:127.0.0.1:3389 `
+                  -o StrictHostKeyChecking=no `
+                  -o ServerAliveInterval=30 `
+                  0WQ85RZeimH+force+tcp@free.pinggy.io
+              Start-Sleep -Seconds 10
+          }
+
+      # Step 5: Save Data folder cache
+      - name: Save Data folder cache
+        uses: actions/cache@v4
+        continue-on-error: true
+        with:
+          path: C:\Users\Rohit\Desktop\Data
+          key: ${{ runner.os }}-runner-desktop-data-${{ github.run_number }}
