@@ -31,13 +31,6 @@ jobs:
           Invoke-WebRequest -Uri $url -OutFile $output
           Start-Process -FilePath $output -Args "/silent /mergetasks=!runcode" -Wait
 
-      # Install JDK 26 system-wide
-      - name: Install JDK 26
-        shell: pwsh
-        continue-on-error: true
-        run: |
-          winget install --source winget EclipseAdoptium.Temurin.26.JDK --silent --accept-package-agreements
-
       # Step 2: Restore Data folder cache
       - name: Restore Data folder cache
         uses: actions/cache@v4
